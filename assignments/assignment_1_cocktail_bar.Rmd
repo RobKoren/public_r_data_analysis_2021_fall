@@ -155,13 +155,32 @@ count(rare)
 
 ## 8. Which cocktail has an ingredient that is only used in one cocktail?
 
+These are the list of cocktails with only one ingredient:
+
 ```{r}
+rare.list <- as.vector(rare$Var1)
+
+
+cocktail.rare <- cocktail.df %>% filter(ingredients %in% rare.list)
+
+view(unique(cocktail.rare[1]))
+
+cocktail.rare <- cocktail.df[ ! cocktail.df$ingredients %in% unrare, ]
+
 
 ```
 
 ## 9. What are the cocktails without rare ingredients?
 
 ```{r}
+
+unique.rare.cocktail <- unique(cocktail.rare[1])
+
+unique.rare.cocktail <- as.vector(unique.rare.cocktail$name)
+
+cocktail.norare <- cocktail.df %>% filter(name %in% unique.rare.cocktail)
+
+view(unique(cocktail.norare[1]))
   
 ```
 
@@ -170,12 +189,17 @@ count(rare)
 Create a matrix that shows all cocktail names as rows and all ingredients as columns. When a cocktail requires an ingredient, there should be an "X" in the cell, otherwise, the cell should remain empty. Example:
 
 ```{r}
+cheat.sheet <- ingr.df[,c(1,8)]
+
+
+require(reshape2)
+
+cheat.sheet1 <- dcast(cheat.sheet, name~ingredients, fill=0)
+cheat.sheet1[cheat.sheet1=="1"]<-"X"
+
 
 ```
 
-```{r}
-
-```
 
 Congrats, the bar is now officially open!
 
