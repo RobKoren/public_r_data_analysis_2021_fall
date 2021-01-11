@@ -20,6 +20,7 @@ You will have to create 3 plots based on the datasets and instructions detailed 
 knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(tidytuesdayR)
+library(forcats)
 ```
 
 ## Task 1: Climbing expeditions
@@ -31,7 +32,46 @@ The 2020-09-22 TidyTueday datasets are about climbing expeditions. From the thre
 -   The bar colors use the viridis palette and light theme.
 
 ```{r}
+#Loading data
+climber.all <- tt_load_gh("2020-09-22")
+climber.expeditions <- tt_download(climber.all, files = climber.all[3])
+climber.expeditions <- data.frame(climber.expeditions)
+head(climber.expeditions)
 
+# get the 15 most popular
+
+peak.freq <- forcats::fct_lump(climber.expeditions$expeditions.peak_name, n = 15) %>% table()
+peak.freq <- data.frame(peak.freq)
+
+# drop 'other'
+
+peak.freq <- peak.freq[-16,]
+
+#Vector for subsetting
+names(peak.freq)[names(peak.freq) == "."] <- "Pname"
+peak.freq.vec <- as.vector(peak.freq$Pname)
+
+# season freq -> subset 15 most popular
+season.freq <- rename(count(climber.expeditions, expeditions.peak_name, expeditions.peak_name, expeditions.season), Freq = n)
+
+plot.base <- season.freq[season.freq$expeditions.peak_name %in% peak.freq.vec,]
+
+# build the plot
+
+#Setting light theme & viridis
+
+theme_set(theme_light())
+library(viridis)
+
+
+ ggplot(plot.base, 
+        aes(x = reorder(expeditions.peak_name, Freq, FUN = sum), y = Freq, fill=expeditions.season)) + 
+   geom_bar(stat = "identity",width = 0.8) + 
+   labs(y="Number of Expeditions", y = "") +
+   ggtitle("The 15 most popular peaks stacked by season of expedition") +
+   coord_flip() + 
+   theme(legend.position = "bottom", axis.title.y = element_blank()) +
+   scale_fill_viridis_d(guide_legend(title="Season"))
 ```
 
 ## Task 2: PhDs awarded
@@ -45,6 +85,30 @@ Notes:
 -   The line size is 1.2, the colors are from the brewer "Dark2" palette. The theme is set to minimal.
 
 ```{r}
+phd <- tt_load_gh("2019-02-19")
+phd <- data.frame(tt_download(phd, files = phd))
+
+#aggregate data
+phd.agg <- phd[,c(1,4,5)]
+phd.agg <- aggregate(.~phd_by_field.broad_field+phd_by_field.year, phd.agg, sum)
+
+
+#plot
+theme_set(theme_minimal())
+base.plot <- ggplot(phd.agg,
+       aes(x = phd_by_field.year, y = phd_by_field.n_phds, group = phd_by_field.broad_field, color = phd_by_field.broad_field)) +
+  geom_line(size = 1.2)
+
+require(scales)
+
+base.plot +
+  theme(axis.title.y = element_blank(), axis.title.x = element_blank()) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  scale_y_continuous(labels = comma_format(decimal.mark = ",")) +
+  scale_color_brewer(palette = "Dark2",guide_legend(title="Broad Field")) +
+  ggtitle("Number of Phds in the US by year")
+                  
+                     
 
 ```
 
@@ -59,5 +123,42 @@ Notes:
 -   The point size is 2, . The theme is set to light.
 
 ```{r}
+commute <- tt_load_gh("2019-11-05")
+commute <- data.frame(tt_download(commute, files = commute))
 
+#aggregate data
+commute.aggr <- commute[c(8,4,5,9)]
+# adding an NA level o factors to keep NAs during aggregate
+
+nm1 <- setdiff(names(commute.aggr[-3]), 'count')
+commute.aggr[nm1] <- lapply(commute.aggr[nm1], addNA)
+commute.aggr <- aggregate(.~commute.state_abb+commute.mode+commute.state_region, commute.aggr, na.action = na.pass, sum)
+
+#setting up the plot
+theme_set(theme_light())
+plot.commute <- commute.aggr %>% 
+  spread(key = commute.mode, value = commute.n) %>% 
+  ggplot(aes(x = Walk,
+             y = Bike,
+             label = commute.state_abb,
+             group = commute.state_region,
+             color = commute.state_region)) +
+  scale_x_continuous(labels = comma_format(decimal.mark = ","),
+                     trans = "log10",
+                     limits = c(3000, 500000),
+                     breaks = c(3000, 10000, 30000, 100000, 300000)) +
+  scale_y_continuous(labels = comma_format(decimal.mark = ","),
+                     trans = "log10",
+                     limits = c(100, 150000),
+                     breaks = c(100, 1000, 10000, 100000)) +
+  geom_point(size = 2) + 
+  geom_text() + 
+  guides(fill=guide_legend(title="New Legend Title")) +
+  labs(x="Number of Ppl walking to work (log N)",
+       y = "Number of Ppl biking to work (log N)") +
+  ggtitle("Number of People walking vs. biking to work in each US state")
+
+plot.commute$labels$colour <- "State Region"
+
+plot.commute
 ```
