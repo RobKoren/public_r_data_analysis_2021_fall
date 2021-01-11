@@ -720,7 +720,6 @@ cocktail.df &lt;- ingr.df</code></pre>
 <div id="number-of-unique-ingredients" class="section level2">
 <h2>4. Number of unique ingredients</h2>
 <p>How many different ingredients you will need?</p>
-<p><em>A: 62</em></p>
 <pre class="r"><code>count(as.data.frame(table(cocktail.df$ingredients)))</code></pre>
 <pre><code>##    n
 ## 1 62</code></pre>
@@ -728,20 +727,94 @@ cocktail.df &lt;- ingr.df</code></pre>
 <div id="what-are-the-top-10-ingredients" class="section level2">
 <h2>5. What are the top 10 ingredients?</h2>
 <p>What are the 10 most frequently used ingredients? If there are ties, you can list more than 10.</p>
+<pre class="r"><code>top10 &lt;- data.frame(table(cocktail.df$ingredients))
+
+top10 %&gt;% 
+  top_n(11) %&gt;% 
+  arrange(desc(Freq))</code></pre>
+<pre><code>## Selecting by Freq</code></pre>
+<pre><code>##                  Var1 Freq
+## 1         Lemon Juice   15
+## 2        Simple Syrup   14
+## 3                 Gin   13
+## 4      Sweet Vermouth   13
+## 5   Angostura Bitters   12
+## 6          Lime Juice   12
+## 7     Saline Solution   10
+## 8               Water   10
+## 9                 Rye    8
+## 10             Cognac    6
+## 11 Luxardo Maraschino    6</code></pre>
 </div>
 <div id="which-cocktails-hashave-the-most-ingredients" class="section level2">
 <h2>6. Which cocktail(s) has/have the most ingredients?</h2>
 <p>Count the number of ingredients and filter all the cocktails that has that many.</p>
+<pre class="r"><code>name.ingr &lt;- as.data.frame(table(cocktail.df$name))
+names(name.ingr)[names(name.ingr) == &quot;Freq&quot;] &lt;- &quot;Ingredients.Num&quot;
+
+name.ingr %&gt;% top_n(6) %&gt;% arrange(desc(Ingredients.Num))</code></pre>
+<pre><code>## Selecting by Ingredients.Num</code></pre>
+<pre><code>##                 Var1 Ingredients.Num
+## 1  Blender Margarita               6
+## 2 Carbonated Negroni               6
+## 3        Clover Club               6
+## 4    De La Louisiane               6
+## 5          Pink Lady               6
+## 6        Vieux Carre               6</code></pre>
 </div>
 <div id="how-many-ingredients-appear-in-only-one-cocktail-rare-ingredient" class="section level2">
 <h2>7. How many ingredients appear in only one cocktail (rare ingredient)?</h2>
 <p>Count all cocktails with only one ingredient, and</p>
+<pre class="r"><code>only.1 &lt;- as.data.frame(table(cocktail.df$ingredients))
+
+rare &lt;- only.1 %&gt;% filter(Freq == 1)
+
+count(rare)</code></pre>
+<pre><code>##    n
+## 1 28</code></pre>
 </div>
 <div id="which-cocktail-has-an-ingredient-that-is-only-used-in-one-cocktail" class="section level2">
 <h2>8. Which cocktail has an ingredient that is only used in one cocktail?</h2>
+<p>These are the list of cocktails with only one ingredient:</p>
+<pre class="r"><code>rare.list &lt;- as.vector(rare$Var1)
+
+
+cocktail.rare &lt;- cocktail.df %&gt;% filter(ingredients %in% rare.list)
+
+view(unique(cocktail.rare[1]))</code></pre>
 </div>
 <div id="what-are-the-cocktails-without-rare-ingredients" class="section level2">
 <h2>9. What are the cocktails without rare ingredients?</h2>
+<pre class="r"><code>rare</code></pre>
+<pre><code>##                                      Var1 Freq
+## 1                           100-Proof Rye    1
+## 2                            80-Proof Rye    1
+## 3                                Absinthe    1
+## 4                    Absolut Citron Vodka    1
+## 5         Agar-Clarified Grapefruit Juice    1
+## 6                              Amer Picon    1
+## 7   Centrifuge-Clarified Grapefruit Juice    1
+## 8                          Champagne Acid    1
+## 9                          Cherry Herring    1
+## 10 Clarified Lime Juice Or Champagne Acid    1
+## 11                        Cranberry Juice    1
+## 12                       Crem De Violette    1
+## 13                         Demerara Syrup    1
+## 14                     Dolin Dry Vermouth    1
+## 15                               Drambuie    1
+## 16                          Fernet Branca    1
+## 17                            Heavy Cream    1
+## 18                       Hellfire Bitters    1
+## 19       Lairds Applejack Bottled In Bond    1
+## 20                      Luxardo Marschino    1
+## 21                            Old Tom Gin    1
+## 22                                  Pisco    1
+## 23                   Quinine Simple Syrup    1
+## 24                                 Saline    1
+## 25                                 Simple    1
+## 26                               Sloe Gin    1
+## 27                  White Crâźme De Cacao    1
+## 28                           White Mezcal    1</code></pre>
 </div>
 <div id="create-a-cheat-sheet-for-the-bartender" class="section level2">
 <h2>10. Create a cheat sheet for the bartender!</h2>
