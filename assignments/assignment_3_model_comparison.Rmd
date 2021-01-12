@@ -60,6 +60,7 @@ Read the dataset used in this assignment. Pay attention to the extension of the 
 
 ```{r}
 require(readxl)
+require(tidyverse)
 
 
 temp = tempfile(fileext = ".xlsx")
@@ -114,6 +115,7 @@ if(nrow(wisdom)-sum(inside.range(wisdom$pain_cat, pain_cat.var))> 0)
 if(nrow(wisdom)-sum(inside.range(wisdom$mindfulness, maas.var))> 0)
   {incorr <- append(incorr, names(wisdom[9]))}
 
+
 #to be corrected
 incorr
 
@@ -125,15 +127,18 @@ If you find values in the dataset during the EDA, that are not correct based on 
 
 ```{r}
 # omitting rows with incorrect range values
-
+incorr
 wisdom <- wisdom[-which(wisdom$pain > 10),]
 wisdom <- wisdom[-which(wisdom$mindfulness>6),]
 
-#run means and sd
-wisdom.num <- wisdom[-c(1,3)]
+# 1 coding error in sex var.
 
-library(psych)
-describe(wisdom.num, skew = T, ranges = T, type = 1)
+wisdom$sex[wisdom$sex == "woman"] <- "female"
+wisdom$sex <- factor(wisdom$sex)
+
+#reduce dataset for vars we actually use
+wisdom <- wisdom[,-c(1, 10:12)]
+wisdom.num <- wisdom[-c(2)] #only numericals
 
 ```
 
@@ -143,46 +148,134 @@ describe(wisdom.num, skew = T, ranges = T, type = 1)
 In order to test the more complex model for outliers and to test the assumptions first build the model.
 
 ```{r}
+#build complex model 
+
+model.comp <- lm(pain ~
+                   age +
+                   sex +
+                   STAI_trait +
+                   pain_cat +
+                   mindfulness +
+                   cortisol_serum +
+                   cortisol_saliva, data = wisdom)
 
 ```
+
 
 #### Checking for influential outliers
 
 Check for outlier values in the model.
 
 ```{r}
-#age, sex, pain
-require(gridExtra)
-pain.hist <- ggplot(wisdom) +
-  aes(x = pain) +
-  geom_histogram(bins = 25L, fill = "#0c4c8a") +
-  theme_minimal()
+## check Mahalanobis distance for outliers
 
-pain.box <- ggplot(wisdom) +
-  aes(x = "", y = pain) +
-  geom_boxplot(fill = "#0c4c8a") +
-  theme_minimal()
+mahal <- mahalanobis(wisdom.num,
+                     colMeans(wisdom.num, na.rm = T),
+                     cov(wisdom.num, use = "pairwise.complete.obs"))
 
-grid.arrange(pain.hist, pain.box, nrow = 1)
+## create cutoff score for extreme datapoints
+cutoff = qchisq(1-0.001, ncol(wisdom.num))
+cutoff # our cutoff score
+ncol(wisdom.num) # degrees of freedom
+
+mahal.out <- as.numeric(mahal > cutoff)
+table(mahal.out)
+
+## leverage
+k = 7 ##number of IVs in the final step
+leverage <- hatvalues(model.comp)
+cutleverage <- (2*k+2) / nrow(wisdom)
+cutleverage ##cut off
+overleverage <-  as.numeric(leverage > cutleverage)
+table(overleverage)
+
+## cooks
+cooks = cooks.distance(model.comp)
+cutcooks = 4 / (nrow(wisdom) - k - 1)
+cutcooks ##get the cut off
+bad.cooks = as.numeric(cooks > cutcooks)
+table(bad.cooks)
+
+## overall outliers
+total.out <- mahal.out + overleverage + bad.cooks
+table(total.out)
+
+## remove outliers that fail even on 1 criteria. We have enogh obs. not to lose much stat.power
+
+noout <- subset(wisdom, total.out < 1)
+
+## rebuilding complex model with outliers addressed
+
+model.comp <- lm(pain ~
+                   age +
+                   sex +
+                   STAI_trait +
+                   pain_cat +
+                   mindfulness +
+                   cortisol_serum +
+                   cortisol_saliva, data = noout)
+
 ```
 
+#### Additivity
+
+```{r}
+
+summary(model.comp, correlation = T) #cortisol variables too highly correlated
+
+## remove serum from model as it is the least correlated with the DV
+
+model.comp1 <- lm(pain ~
+                   age +
+                   sex +
+                   STAI_trait +
+                   pain_cat +
+                   mindfulness +
+                   cortisol_saliva, data = noout)
+
+summary(model.comp, correlation = T)
+
+```
+
+
 #### Checking assumptions
+
+```{r}
+## setting up vars for assumptions
+
+standardized <- rstudent(model.comp1) #standardized residuals
+fitted <- scale(model.comp1$fitted.values) #fitted values scaled
+
+
+```
+
 
 Check the normality assumption.
 
 ```{r}
+
+hist(standardized) # close to normal
+
 
 ```
 
 Check the linearity assumption.
 
 ```{r}
+qqnorm(standardized)
+abline(0,1) #close to linear
 
 ```
+
 
 Check the homoscedasticty assumption (homogeneity of variance).
 
 ```{r}
+plot(fitted, standardized) 
+abline(0,0)
+abline(v=0)
+
+#even distribution and shape
 
 ```
 
@@ -195,6 +288,10 @@ https://statisticalhorizons.com/multicollinearity
 http://blog.minitab.com/blog/understanding-statistics/handling-multicollinearity-in-regression-analysis
 
 ```{r}
+require(car)
+vif(model.comp1)
+
+# all of them are below 3
 
 ```
 
@@ -202,40 +299,90 @@ http://blog.minitab.com/blog/understanding-statistics/handling-multicollinearity
 
 If based on the assumption tests you decide to drop a predictor variable you should do that here. Create your updated model.
 
-```{r}
+This has already been done on an as-we-go basis. Changes include:
 
-```
+  * removing outliers
+  * removing __cortisol_serum__ predictor for high correlation with __cortisol_saliva__.* **Cortisol_saliva** had better correlation with our DV 
 
 #### Checking outliers of the updated model
 
 ```{r}
+## check Mahalanobis distance for outliers
+
+mahal1 <- mahalanobis(noout[,-2],
+                     colMeans(noout[,-2], na.rm = T),
+                     cov(noout[,-2], use = "pairwise.complete.obs"))
+
+## create cutoff score for extreme datapoints
+cutoff1 = qchisq(1-0.001, ncol(noout))
+cutoff1 # our cutoff score
+ncol(noout) # degrees of freedom
+
+mahal.out1 <- as.numeric(mahal1 > cutoff1)
+table(mahal.out1)
+
+## leverage
+k1 = 6 ##number of IVs in the final step
+leverage1 <- hatvalues(model.comp1)
+cutleverage1 <- (2*k+2) / nrow(noout)
+cutleverage1 ##cut off
+overleverage1 <-  as.numeric(leverage1 > cutleverage1)
+table(overleverage1)
+
+## cooks
+cooks1 = cooks.distance(model.comp1)
+cutcooks1 = 4 / (nrow(noout) - k - 1)
+cutcooks1 ##get the cut off
+bad.cooks1 = as.numeric(cooks1 > cutcooks1)
+table(bad.cooks1)
+
+## overall outliers
+total.out1 <- mahal.out1 + overleverage1 + bad.cooks1
+table(total.out1)
+
+##no outiers that violate 2+ criteria we stick to model.comp1
+
+
+
 
 ```
 
 #### Checking assumptions of the updated model
 
+```{r}
+## setting up vars for assumptions
+
+standardized <- rstudent(model.comp1) #standardized residuals
+fitted <- scale(model.comp1$fitted.values) #fitted values scaled
+```
+
+
+
 Normality assumption
 
 ```{r}
-
+hist(standardized) # close to normal
 ```
 
 Linearity assumption
 
 ```{r}
-
+qqnorm(standardized)
+abline(0,1) #close to linear
 ```
 
 Homoscedasticty assumption (homogeneity of variance)
 
 ```{r}
-
+plot(fitted, standardized) 
+abline(0,0)
+abline(v=0)
 ```
 
 Multicollinearity assumption
 
 ```{r}
-
+vif(model.comp1)
 ```
 
 ## Model comparison
@@ -243,17 +390,61 @@ Multicollinearity assumption
 Create the simple model and get the results of the model that needs to be reported based on the What to report section.
 
 ```{r}
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+require(kableExtra)
+library(broom)
+model1 <- lm(pain ~
+               sex +
+               age, data = noout)
+summary(model1)
+glance(model1)
+tab_model(model1, show.std = T, show.df = T, show.aic = T, show.stat = T)
+
 
 ```
+
+
 
 Create the more complex model based on the results of the model diagnostics. Also, get the results that needs to be reported based on the What to report section.
 
 ```{r}
+model2 <- lm(pain ~
+                   age +
+                   sex +
+                   STAI_trait +
+                   pain_cat +
+                   mindfulness +
+                   cortisol_saliva, data = noout)
+
+summary(model2)
+tab_model(model2, show.std = T, show.df = T, show.stat = T)
 
 ```
+
+
 
 Compare the two models.
 
 ```{r}
+anova(model1, model2)
+tab_model(model1, model2, show.std = T, show.df = T, col.order = c("est", "std.est", "ci", "p"))
 
+glance(model1) %>%
+  dplyr::select(adj.r.squared, sigma, AIC, BIC, p.value)
+glance(model2) %>%
+  dplyr::select(adj.r.squared, sigma, AIC, BIC, p.value)
 ```
+
+## Results
+
+  Age, Gender, State Trait Anxiety, Pain Catastrophizing, dispositional mindfulness and hormonal responses were used to predict a person’s overall pain level in the postperative pain of wisdom tooth extraction.  The data were screened for assumptions, and `r sum(total.out)` participants were eliminated due to high Cook’s and Leverage values.  Linearity, normality, multicollinearity, homogeneity, and homoscedasticity were all met.
+
+  Age and sex were entered first into a hierarchical regression to control for demographic differences in the level of postoperative pain.  Overall, this model was significant, indicating that demographics predict the level of pain patients feel after surgery (F(2, 140) = 6.267, p < .005, R2adj = .069). The model also qualified to have an acceptable level of goodness of fit (AIC = 494.4865). Out of the variables investigated, only *age* was significant with a negative effect size (β = -0.29, t(140) = 3.53, p < .001). The result assumes that younger patients experience less postoperative pain.
+  Next, State Trait Anxiety, Pain Catastrophizing, dispositional mindfulness and hormonal responses were added in a second step to examine their predictive value after controlling for demographic variables. During the data screening process the two variables measuring cortisol levels showed high correlational values (r =-0.89). In the end, cortisol_serum was dropped since cortisol_saliva had a better correlation with the dependent variable.  The addition of these variables showed a significant model that explained more variance in our dependent variable (F(6, 136) = 14.72, p < .0001, R2adj = .367). The second model also showed an acceptable level of goodness (AIC = `r AIC(model2)`). The model only presented two significant predictors. Cortisol levels measured from saliva (β = 0.42, t(136) = 4.74, p < .00`1) showed stronger predictive value than Pain catastrophizing (β = 0.27, t(136) = 2.98, p < .001). This result assumes that those, who have high cortisol levels and magnify the threat value of a pain stimulus will experience stronger postoperative pains.
+  Adding predictors to the second variable showed significant changes and resulted in an improved model ΔF(4, 136) = 17.475, p < .001, ΔR2adj= .298). We can observe that the second model explained more variance in our dependent variable. Interestingly, age was not identified as a significant predictor. 
+
+## Discussion
+
+In our effort to investigate postoperative pain of wisdom tooth surgery we learned that failure to inhibit thought of fear and anxiety results in a greater magnitude of postoperative pain. Giving patients distractors while they are in the waiting room might help with their levels of pain experienced.
