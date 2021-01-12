@@ -59,8 +59,19 @@ In your discussion of the findings, briefly interpret the results of the above a
 Read the dataset used in this assignment. Pay attention to the extension of the datafile.
 
 ```{r}
+require(readxl)
+
+
+temp = tempfile(fileext = ".xlsx")
+dataURL <- "https://github.com/elte-ppk-r-course/public_r_data_analysis_2021_fall/blob/master/data/assignment_3_dataset.xlsx?raw=true"
+download.file(dataURL, destfile=temp, mode='wb')
+
+wisdom<- readxl::read_excel(temp)
+
 
 ```
+
+
 
 ## Data and model diagnostics 
 ### Data diagnostics
@@ -69,6 +80,42 @@ Read the dataset used in this assignment. Pay attention to the extension of the 
 Run an exploratory data analysis (EDA) to investigate the dataset.
 
 ```{r}
+str(wisdom)
+
+# Fix discrete vars
+
+wisdom$sex <- as.factor(wisdom$sex)
+
+#check colnames
+colnames(wisdom)
+
+# Check Nas
+table(is.na(wisdom)) # all Nas
+
+## Checking Means and Deviations, ranges
+#remove discrete vars
+
+
+# Identifying incorrect ranges
+require(spatstat.utils)
+
+pain.var <- c(1,10)
+stai.var <- c(20,80)
+pain_cat.var <- c(0 ,52)
+maas.var <- c(1,6)
+incorr <- NULL
+
+if(nrow(wisdom)-sum(inside.range(wisdom$pain, pain.var))> 0)
+  {incorr <- names(wisdom[2])} 
+if(nrow(wisdom)-sum(inside.range(wisdom$STAI_trait, stai.var))> 0)
+  {incorr <- append(incorr, names(wisdom[5]))}
+if(nrow(wisdom)-sum(inside.range(wisdom$pain_cat, pain_cat.var))> 0)
+  {incorr <- append(incorr, names(wisdom[6]))}
+if(nrow(wisdom)-sum(inside.range(wisdom$mindfulness, maas.var))> 0)
+  {incorr <- append(incorr, names(wisdom[9]))}
+
+#to be corrected
+incorr
 
 ```
 
@@ -77,6 +124,16 @@ Run an exploratory data analysis (EDA) to investigate the dataset.
 If you find values in the dataset during the EDA, that are not correct based on the provided descriptions of the variables of the dataset please correct them here.
 
 ```{r}
+# omitting rows with incorrect range values
+
+wisdom <- wisdom[-which(wisdom$pain > 10),]
+wisdom <- wisdom[-which(wisdom$mindfulness>6),]
+
+#run means and sd
+wisdom.num <- wisdom[-c(1,3)]
+
+library(psych)
+describe(wisdom.num, skew = T, ranges = T, type = 1)
 
 ```
 
@@ -94,7 +151,19 @@ In order to test the more complex model for outliers and to test the assumptions
 Check for outlier values in the model.
 
 ```{r}
+#age, sex, pain
+require(gridExtra)
+pain.hist <- ggplot(wisdom) +
+  aes(x = pain) +
+  geom_histogram(bins = 25L, fill = "#0c4c8a") +
+  theme_minimal()
 
+pain.box <- ggplot(wisdom) +
+  aes(x = "", y = pain) +
+  geom_boxplot(fill = "#0c4c8a") +
+  theme_minimal()
+
+grid.arrange(pain.hist, pain.box, nrow = 1)
 ```
 
 #### Checking assumptions
@@ -188,4 +257,3 @@ Compare the two models.
 ```{r}
 
 ```
-
